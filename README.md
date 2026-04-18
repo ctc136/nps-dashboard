@@ -32,14 +32,17 @@ runs directly against the SQLite database. No query results pass through
 Claude — it acts purely as a natural language to SQL translator.
 
 ## Project Structure
+
+```
 nps-dashboard/
-├── api.py                 # Flask REST API
-├── load_data.py           # CSV ingestion script
-├── nps.db                 # SQLite database (not committed)
-├── Annual Summary Report  # Raw CSV (not committed)
-└── client/                # React frontend
-└── src/
-└── App.jsx
+├── api.py              # Flask REST API
+├── load_data.py        # CSV ingestion script
+├── nps.db              # SQLite database (not committed)
+├── .env                # API key (not committed)
+└── client/             # React frontend
+    └── src/
+        └── App.jsx
+```
 
 ## Setup
 
