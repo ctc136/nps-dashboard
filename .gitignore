@@ -1,0 +1,5 @@
+.env
+venv/
+Annual Summary Report (1904 - Last Calendar Year).csv
+nps.db
+__pycache__/
