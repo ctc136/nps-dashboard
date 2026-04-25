@@ -4,7 +4,7 @@ import {
   Tooltip, ResponsiveContainer
 } from "recharts"
 
-const API = "http://localhost:5001"
+const API = import.meta.env.VITE_API_URL
 
 const FILTERS = {
   all: { label: "All NPS Units", suffixes: null },
