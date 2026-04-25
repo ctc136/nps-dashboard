@@ -1,24 +1,27 @@
 from flask import Flask, jsonify, request
 from flask_cors import CORS
-import sqlite3
+import psycopg2
+from psycopg2.extras import RealDictCursor
+import os
+from dotenv import load_dotenv
+load_dotenv(override=True)
 
 app = Flask(__name__)
 CORS(app)
 
-DB_FILE = "nps.db"
+DATABASE_URL = os.getenv("DATABASE_URL")
 
 def get_db():
-    conn = sqlite3.connect(DB_FILE)
-    conn.row_factory = sqlite3.Row  # lets us return dicts instead of tuples
-    return conn
+    return psycopg2.connect(DATABASE_URL, connect_timeout=10, sslmode="require")
 
 # --- Route 1: Get all distinct park names ---
 @app.route('/api/parks')
 def get_parks():
     conn = get_db()
-    parks = conn.execute(
-        "SELECT DISTINCT park_name FROM visits ORDER BY park_name"
-    ).fetchall()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    cur.execute("SELECT DISTINCT park_name FROM visits ORDER BY park_name")
+    parks = cur.fetchall()
+    cur.close()
     conn.close()
     return jsonify([row['park_name'] for row in parks])
 
@@ -26,14 +29,17 @@ def get_parks():
 @app.route('/api/parks/<park_name>/history')
 def get_park_history(park_name):
     conn = get_db()
-    rows = conn.execute(
-        """SELECT year, recreation_visitors 
-           FROM visits 
-           WHERE park_name = ? 
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    cur.execute(
+        """SELECT year, recreation_visitors
+           FROM visits
+           WHERE park_name = %s
            AND recreation_visitors IS NOT NULL
            ORDER BY year""",
         (park_name,)
-    ).fetchall()
+    )
+    rows = cur.fetchall()
+    cur.close()
     conn.close()
     return jsonify([dict(row) for row in rows])
 
@@ -45,28 +51,31 @@ def get_top_parks():
     suffixes = request.args.get('suffixes', '')
 
     conn = get_db()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
 
     if suffixes:
         suffix_list = suffixes.split(',')
-        placeholders = ' OR '.join([f"park_name LIKE ?" for _ in suffix_list])
+        placeholders = ' OR '.join(['park_name LIKE %s' for _ in suffix_list])
         params = [f'%{s}' for s in suffix_list] + [year, limit]
-        rows = conn.execute(f'''
+        cur.execute(f'''
             SELECT park_name, recreation_visitors
             FROM visits
             WHERE ({placeholders})
-            AND year = ?
+            AND year = %s
             AND recreation_visitors IS NOT NULL
             ORDER BY recreation_visitors DESC
-            LIMIT ?''', params).fetchall()
+            LIMIT %s''', params)
     else:
-        rows = conn.execute('''
+        cur.execute('''
             SELECT park_name, recreation_visitors
             FROM visits
-            WHERE year = ?
+            WHERE year = %s
             AND recreation_visitors IS NOT NULL
             ORDER BY recreation_visitors DESC
-            LIMIT ?''', (year, limit)).fetchall()
+            LIMIT %s''', (year, limit))
 
+    rows = cur.fetchall()
+    cur.close()
     conn.close()
     return jsonify([dict(row) for row in rows])
 
@@ -74,13 +83,16 @@ def get_top_parks():
 @app.route('/api/totals-by-year')
 def get_totals_by_year():
     conn = get_db()
-    rows = conn.execute(
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    cur.execute(
         """SELECT year, SUM(recreation_visitors) as total_visitors
            FROM visits
            WHERE recreation_visitors IS NOT NULL
            GROUP BY year
            ORDER BY year"""
-    ).fetchall()
+    )
+    rows = cur.fetchall()
+    cur.close()
     conn.close()
     return jsonify([dict(row) for row in rows])
 
@@ -107,7 +119,7 @@ def ask_question():
     message = client.messages.create(
         model='claude-opus-4-5',
         max_tokens=500,
-        system=f'''You are a SQL expert. Convert natural language questions to SQLite SQL queries.
+        system=f'''You are a SQL expert. Convert natural language questions to PostgreSQL SQL queries.
 Only return the raw SQL query with no explanation, no markdown, no backticks.
 Use only the table and columns described here:
 {schema}
@@ -120,7 +132,10 @@ Only generate SELECT statements, never INSERT, UPDATE, or DELETE.''',
 
     try:
         conn = get_db()
-        rows = conn.execute(sql).fetchall()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        cur.execute(sql)
+        rows = cur.fetchall()
+        cur.close()
         conn.close()
         results = [dict(row) for row in rows]
         return jsonify({'sql': sql, 'results': results})
