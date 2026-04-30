@@ -3,10 +3,12 @@ from flask_cors import CORS
 import psycopg2
 from psycopg2.extras import RealDictCursor
 import os
+import logging
 from dotenv import load_dotenv
 load_dotenv(override=True)
 
 app = Flask(__name__)
+app.logger.setLevel(logging.ERROR)
 CORS(app)
 
 DATABASE_URL = os.getenv("DATABASE_URL")
@@ -140,7 +142,8 @@ Only generate SELECT statements, never INSERT, UPDATE, or DELETE.''',
         results = [dict(row) for row in rows]
         return jsonify({'sql': sql, 'results': results})
     except Exception as e:
-        return jsonify({'error': str(e), 'sql': sql}), 500
+        app.logger.error("Query execution failed. sql=%r error=%r", sql, str(e))
+        return jsonify({'error': 'Query failed. Please try again.'}), 500
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5001))

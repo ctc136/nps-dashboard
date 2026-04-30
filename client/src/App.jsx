@@ -100,7 +100,7 @@ export default function App() {
         body: JSON.stringify({ question })
       })
       const data = await res.json()
-      if (data.error) setAskError(`Error: ${data.error}`)
+      if (data.error) setAskError(data.error)
       else { setSqlGenerated(data.sql); setAskResults(data.results) }
     } catch { setAskError("Failed to reach API") }
     setAsking(false)
